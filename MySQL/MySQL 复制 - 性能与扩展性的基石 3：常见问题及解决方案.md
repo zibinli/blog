@@ -110,5 +110,3 @@ ERROR 1200 (HY000): The server us bit configured as slave; fix in config file or
 ### 总结
 1. 复制问题要分清楚是 master 的问题，还是 slave 的问题。
 2. master 问题找 binlog，slave 问题找 relaylog。
-
-我的博客即将同步至腾讯云+社区，邀请大家一同入驻：https://cloud.tencent.com/developer/support-plan?invite_code=16s4qjbz9ahdf
