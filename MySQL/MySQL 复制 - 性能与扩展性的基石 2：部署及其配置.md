@@ -36,6 +36,7 @@ docker ps
 ![docker-ps](https://github.com/zibinli/blog/blob/master/MySQL/image/2-1.png?raw=true)
 
 **5) 使用客户端连接工具测试丽连接 mysql**
+
 ![接测试](https://github.com/zibinli/blog/blob/master/MySQL/image/2-2.png?raw=true)
 
 ### 2 配置 Master 和 Slave
