@@ -33,8 +33,7 @@
 
 另外，还有潜在的丢失复制事件的问题。可能有主库上已发生的修改还没有更新到它任何一台备库上的情况。甚至可能一条语句在主库上执行了回滚，但在备库上没有回滚，这样备库可能就超过主库的逻辑复制位置。如果能在某一点恢复主库的数据，也许就可以取得丢失语句，并手动执行他们。
 
-
-在以下步骤中，需要确保在服务器中使用 Master_Log_File 和 Read_Master_Log_Pos 的值。
+在以下描述中，需要确保在服务器中使用 Master_Log_File 和 Read_Master_Log_Pos 的值。
 
 #### 2.1 主备结构之备库提升
 1. 确定哪台备库的数据最新。检查每台备库上 SHOW_SLAVE_STATUS 命令的输出，选择其中 Master_Log_File 和 Read_Master_Log_Pos 的值最新的那个。
@@ -63,9 +62,9 @@
 
 一起来看个栗子。
 
-假设 s1 是 s2 和 s3 的主库。其中 s1 已经崩溃。根据 SHOW SLAVE STATUS 获得 Master_Log_File 和 Read_Master_Log_Pos 的值，s2 已结执行完了 s1 上所有的二进制日志，但 s3 还没有。如图 1
+假设 s1 是 s2 和 s3 的主库。其中 s1 已经崩溃。根据 SHOW SLAVE STATUS 获得 Master_Log_File 和 Read_Master_Log_Pos 的值，s2 已结执行完了 s1 上所有的二进制日志，但 s3 还没有。如图 1：
 
-图 1
+[图 1：s1 崩溃，s2 已追赶上，s3 落后](https://github.com/zibinli/blog/blob/master/MySQL/image/1-1.png?raw=true)
 
 我们可以肯定 s2 已经执行完了主库上的所有二进制日志，因为 Master_log_File 和 Read_Master_Log_Pos 的值和 s1 上最后的日志位置相吻合。因此，我们可以将 s2 提升为新主库，并将 s3 设置为 s2 的备库。
 
