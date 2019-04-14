@@ -64,7 +64,7 @@
 
 假设 s1 是 s2 和 s3 的主库。其中 s1 已经崩溃。根据 SHOW SLAVE STATUS 获得 Master_Log_File 和 Read_Master_Log_Pos 的值，s2 已结执行完了 s1 上所有的二进制日志，但 s3 还没有。如图 1：
 
-[图 1：s1 崩溃，s2 已追赶上，s3 落后](https://github.com/zibinli/blog/blob/master/MySQL/image/1-1.png?raw=true)
+![图 1：s1 崩溃，s2 已追赶上，s3 落后](https://github.com/zibinli/blog/blob/master/MySQL/image/1-1.png?raw=true)
 
 我们可以肯定 s2 已经执行完了主库上的所有二进制日志，因为 Master_log_File 和 Read_Master_Log_Pos 的值和 s1 上最后的日志位置相吻合。因此，我们可以将 s2 提升为新主库，并将 s3 设置为 s2 的备库。
 
