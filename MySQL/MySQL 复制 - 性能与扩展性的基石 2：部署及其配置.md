@@ -58,6 +58,7 @@ c) 配置 my.cnf
 ```
 vim /etc/mysql/my.cnf
 // 在my.cnf 中添加如下配置
+[mysqld]
 server-id=110 # 服务器 id，同一局域网内唯一
 log-bin=/var/lib/mysql/mysql-bin # 二进制日志路径
 ```
@@ -85,6 +86,7 @@ a) 配置 my.cnf
 ```
 vim /etc/mysql/my.cnf
 // 在my.cnf 中添加如下配置
+[mysqld]
 server-id=120 # 服务器 id，同一局域网内唯一
 log-bin=/var/lib/mysql/mysql-bin # 二进制日志路径
 relay_log=/path/to/logs/relay-bin # 中继日志路径
