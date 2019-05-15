@@ -47,8 +47,40 @@ typedef struct dictEntry {
 ![连接在一起的键 k1 和 k0](https://raw.githubusercontent.com/zibinli/blog/master/Redis/_v_images/20190515205808155_12978.png)
 
 #### 1.3 字典
+字典的结构：
+```
+typedef struct dict {
+    dictType *type; // 类型特定函数
+    void *privdata; // 私有数据
+    dictht ht[2];   // 哈希表(两个)
+    long rehashidx; // 记录 rehash 进度的标志。值为 -1 表示 rehash 未进行
+    int iterators;  // 当前正在迭代的迭代器数
+} dict;
+```
 
+dictType 的结构如下：
+```
+typedef struct dictType {
+    // 计算哈希值的函数
+    unsigned int (*hashFunction)(const void *key);
+    // 复制键的函数
+    void *(*keyDup)(void *privdata, const void *key);
+    // 复制值的函数
+    void *(*valDup)(void *privdata, const void *obj);
+    // 对比键的函数
+    int (*keyCompare)(void *privdata, const void *key1, const void *key2);
+    // 销毁键的函数
+    void (*keyDestructor)(void *privdata, void *key);
+    // 销毁值的函数
+    void (*valDestructor)(void *privdata, void *obj);
+} dictType;
+```
 
+type 属性和 privdata 属性是针对不同类型的键值对，为创建多态字典而设置的。其中：
+- type 属性是一个指向 dictType 结构的指针，每个 dictType 结构保存了一簇用于操作特定类型键值对的函数。Redis 会为用途不用的字典设置不同的类型特定函数。
+- privdata 属性保存了需要传给那些类型特定函数的可选参数。
+
+而  ht 属性是一个包含两个哈希表的数组。一般情况下，字典
 
 
 
