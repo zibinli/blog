@@ -23,7 +23,7 @@ typedef struct dictht {
 - used 属性记录了哈希表目前已有节点（键值对）的数量。
 - sizemask 属性的值总数等于 size-1，这个属性和哈希值一起决定一个键应该被放到 table 数组中哪个索引上。
 
-图1 展示了一个大小为 4 的空哈希表。
+图 1 展示了一个大小为 4 的空哈希表。
 ![大小为4的空哈希表](https://raw.githubusercontent.com/zibinli/blog/master/Redis/_v_images/20190515203213897_23208.png)
 
 #### 1.2 哈希表节点
@@ -96,7 +96,7 @@ hash = dict->type->hashFunction(key);
 # 根据不同情况，使用 ht[0] 或 ht[1]
 index = hash & dict[x].sizemask;
 ```
-![图4 - 空字典](https://raw.githubusercontent.com/zibinli/blog/master/Redis/_v_images/20190516130418875_30449.png)
+![图 4 - 空字典](https://raw.githubusercontent.com/zibinli/blog/master/Redis/_v_images/20190516130418875_30449.png)
 如图 4，如果把键值对 [k0, v0] 添加到字典中，插入顺序如下：
 ```
 hash = dict-type->hashFunction(k0);
@@ -172,6 +172,7 @@ void tryResizeHashTables(int dbid) {
 2. 当 ht[0] 包含的所有键值对都迁移到 ht[1] 后，此时 ht[0] 变成空表，释放 ht[0]，将 ht[1] 设置为 ht[0]，并在 ht[1] 新创建一个空白哈希表，为下一次 rehash 做准备。
 
 示例：
+
 ![图 8 - 将要执行 rehash 的字典](https://raw.githubusercontent.com/zibinli/blog/master/Redis/_v_images/20190516204031410_827.png)
 假设程序要对图 8 所示字典的 ht[0] 进行扩展操作，那么程序将执行以下步骤：
 1）ht[0].used 当前的值为 4，那么 4*2 = 8，而 2^3 恰好是第一个大于等于 8 的，2 的 n 次方。所以程序会将 ht[1] 哈希表的大小设置为 8。图 9 是 ht[1] 在分配空间之后的字典。
@@ -189,19 +190,55 @@ void tryResizeHashTables(int dbid) {
 
 至此，对哈希表的扩容操作执行完毕，程序成功将哈希表的大小从原来的 4 改为了 8。
 
+#### 3.3 渐进式 rehash
+对于 Redis 的 rehash 而言，并不是一次性、集中式的完成，而是分多次、渐进式地完成，所以也叫**渐进式 rehash**。
 
+之所以采用渐进式的方式，其实也很好理解。当哈希表里保存了大量的键值对，要一次性的将所有键值对全部 rehash 到 ht[1] 里，很可能会导致服务器在一段时间内只能进行 rehash，不能对外提供服务。
 
+因此，为了避免 rehash 对服务器性能造成影响，Redis 分多次、渐进式的将 ht[0] 里面的键值对 rehash 到 ht[1]。
 
+渐进式 rehash 就用到了索引计数器变量 rehashidx，详细步骤如下：
+1. 为 ht[1] 分配空间，让字典同时持有 ht[0] 和 ht[1] 两个哈希表。
+2. 在字段中维持一个索引计数器变量 rehashidx，并将它的值设置为 0，表示开始 rehash。
+3. 在 rehash 期间，每次对字典执行 CURD 操作时，程序除了执行指定的操作外，还会将 ht[0] 哈希表在 rehashidx 索引上的所有键值对移动到 ht[1]，当 rehash 完成后，程序将 rehashidx 的值加一。
+4. 随着不断操作字典，最终在某个时间点上，ht[0] 的所有键值对都会被 rehash 到 ht[1]，这时程序将 rehashidx 属性的值设为 -1，表示 rehash 已完成。
 
+渐进式 rehash 才有分而治之的方式，将 rehash 键值对所需要的计算工作均摊到对字典的 CURD 操作上，从而避免了集中式 rehash 带来的问题。
 
+此外，字典在进行 rehash 时，删除、查找、更新等操作会在两个哈希表上进行。例如，在字典张查找一个键，程序会现在 ht[0] 里面进行查找，如果没找到，再去 ht[1] 上查找。
 
+要注意的是，新增的键值对一律只保存在 ht[1] 里，不在对 ht[0] 进行任何添加操作，保证了 ht[0] 包含的键值对数量只减不增，随着 rehash 操作最终变成空表。
 
+图 12 至 图 17 展示了一次完整的渐进式 rehash 过程：
 
+1）未进行 rehash 的字典
 
+![图 12 - 未进行 rehash 的字典](https://raw.githubusercontent.com/zibinli/blog/master/Redis/_v_images/20190517124408102_7277.png)
 
+2） rehash 索引 0 上的键值对
 
+![图 13 - rehash 索引 0 上的键值对](https://raw.githubusercontent.com/zibinli/blog/master/Redis/_v_images/20190517124520346_18511.png)
 
+3）rehash 索引 1 上的键值对
 
+![图 14 - rehash 索引 1 上的键值对](https://raw.githubusercontent.com/zibinli/blog/master/Redis/_v_images/20190517124558334_4268.png)
 
+4）rehash 索引 2 上的键值对
+
+![图 15 - rehash 索引 2 上的键值对](https://raw.githubusercontent.com/zibinli/blog/master/Redis/_v_images/20190517124630179_28797.png)
+
+5）rehash 索引 3 上的键值对
+
+![图 16 - rehash 索引 3 上的键值对](https://raw.githubusercontent.com/zibinli/blog/master/Redis/_v_images/20190517124709578_3968.png)
+
+6）rehash 执行完毕
+
+![图 17 - rehash 执行完毕](https://raw.githubusercontent.com/zibinli/blog/master/Redis/_v_images/20190517124801249_31619.png)
+
+### 总结
+1. 字段被广泛用于实现 Redis 的各种功能，其中包括数据库和哈希键。
+2. Redis 中的字典使用哈希表作为底层实现，每个字典带有两个哈希表，一个平时使用，一个仅在 rehash 时使用。
+3. 哈希表使用链地址法来解决键冲突，被分配到同一个索引上的多个键值对会连接成一个单向链表。
+4. 在对哈希表进行扩容或收缩操作时，使用渐进式完成 rehash。
 
 
