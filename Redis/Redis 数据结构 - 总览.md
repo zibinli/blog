@@ -1,8 +1,8 @@
 相信很多人应该都知道 Redis 有五种数据类型：字符串、列表、哈希、集合和有序集合。但这五种数据类型是什么含义？Redis 的数据又是怎样存储的？今天我们一起来认识下 Redis 这五种数据结构的含义及其底层实现。
 
-首先要明确的是，Redis 并没有直接使用这五种数据结构来实现键值对数据库，而是基于这些数据结构创建了一套对象系统，我们常说的数据类型，准确来说，就是 Redis 对象系统的类型。因此，我们认识 Redis 的数据结构，就是认识 Redis 的对象系统。
+首先要明确的是，Redis 并没有直接使用这五种数据结构来实现键值对数据库，而是基于这些数据结构创建了一套对象系统，我们常说的数据类型，准确来说，就是 Redis 对象系统的类型。
 
-### 对象结构
+### 对象
 对于 Redis 而言，所有键值对的存储，都是将数据存储在对象结构中。所不同的是，**键总是一个字符串对象，值可以是任意类型的对象**。
 对象源码结构如下：
 ```
@@ -44,7 +44,7 @@ typedef struct redisObject {
 - 压缩列表比快速链表更节约内存，并且在元素数量较少时，在内存中以连续块方式报错的压缩列表比起快速列表可以更快的载入到缓存中；
 - 随着列表对象包含的元素越来越多，使用压缩列表保存元素的优势消失时，对象就会将底层实现从压缩列表转为功能更强、也更适合保存大量元素的快速链表。
 
-后面介绍完编码类型后，我们详细认识不同类型对应的各个编码方式。
+后面介绍完编码类型后，我们会详细认识不同类型对应的各个编码方式。
 
 encoding 属性有以下取值：
 1. OBJ_ENCODING_RAW
@@ -61,24 +61,40 @@ encoding 属性有以下取值：
 对象的编码类型可以由 ```OBJECT ENCODING``` 命令获取。
 ![图 4 - 获取 key 的编码](https://raw.githubusercontent.com/zibinli/blog/master/Redis/_v_images/20190522131136463_24618.png)
 
-OBJECT ENCODING 命令输出值与 encoding 属性取值对应关系如下：
+```OBJECT ENCODING``` 命令对应源码如下：
+```
+# src/object.c
+char *strEncoding(int encoding) {
+    switch(encoding) {
+    case OBJ_ENCODING_RAW: return "raw";
+    case OBJ_ENCODING_INT: return "int";
+    case OBJ_ENCODING_HT: return "hashtable";
+    case OBJ_ENCODING_QUICKLIST: return "quicklist";
+    case OBJ_ENCODING_ZIPLIST: return "ziplist";
+    case OBJ_ENCODING_INTSET: return "intset";
+    case OBJ_ENCODING_SKIPLIST: return "skiplist";
+    case OBJ_ENCODING_EMBSTR: return "embstr";
+    default: return "unknown";
+    }
+}
+```
+
+```OBJECT ENCODING``` 命令输出值与 encoding 属性取值对应关系如下：
 | 对象使用的底层数据结构    | 编码常量    |  OBJECT ENCODING 输出    |
 | :-: | :-: | :-: |
 |  简单动态字符串   |OBJ_ENCODING_RAW     |"raw"     |
-|  整数   |OBJ_ENCODING_INT     |"embstr"     |
+|  整数   |OBJ_ENCODING_INT     |"int"     |
 |  embstr 编码的简单动态字符串   |OBJ_ENCODING_EMBSTR     |"embstr"     |
-|  字典   |OBJ_ENCODING_HT     |"embstr"     |
-|  简单动态字符串   |OBJ_ENCODING_ZIPMAP     |"embstr"     |
-|  双端链表   |OBJ_ENCODING_LINKEDLIST     |"embstr"     |
-|  压缩列表   |OBJ_ENCODING_ZIPLIST     |"embstr"     |
-|  快速列表   |OBJ_ENCODING_QUICKLIST     |"embstr"     |
-|  整数集合   |OBJ_ENCODING_INTSET     |"embstr"     |
-|  跳跃表和字典   |OBJ_ENCODING_SKIPLIST     |"embstr"     |
+|  字典   |OBJ_ENCODING_HT     |"hashtable"     |
+|  压缩列表   |OBJ_ENCODING_ZIPLIST     |"ziplist"     |
+|  快速列表   |OBJ_ENCODING_QUICKLIST     |"quicklist"     |
+|  整数集合   |OBJ_ENCODING_INTSET     |"intset"     |
+|  跳跃表   |OBJ_ENCODING_SKIPLIST     |"skiplist"     |
 
 总结来看，如下图：
-![11 种不同编码的数据对象](https://raw.githubusercontent.com/zibinli/blog/master/Redis/_v_images/20190521202055424_22716.png)
+![图 5 - 11 种不同编码的数据对象](https://raw.githubusercontent.com/zibinli/blog/master/Redis/_v_images/20190521202055424_22716.png)
 
-十一种数据对象分别是：
+十一种不同编码的对象分别是：
 1. 使用双端或快速列表实现的列表对象
 2. 使用压缩列表实现的列表对象
 3. 使用字典实现的哈希对象
@@ -91,7 +107,83 @@ OBJECT ENCODING 命令输出值与 encoding 属性取值对应关系如下：
 10. 使用 embstr 编码的 SDS 实现的字符串对象
 11. 使用整数值实现的字符串对象
 
-### 对象验证
-上面了解了 Redis 的对象系统，但这都是理论知识，有没有方法可以实时查看
+接下来，我们将对上述十一种对象一一介绍。
 
+### 字符串对象
+字符串对象的可选编码分别是：int、raw 或者 embstr。
 
+#### int 编码的字符串对象
+如果一个字符串对象保存的是整数值，并且这个整数值可以用 long 类型表示，那么字符串对象会将整数值保存在字符串对象结构的 ptr 属性中，并将字符串对象的编码设置为 int。
+
+我们执行以下 SET 命令，服务器将创建一个如下图所示的 int 编码的字符串对象作为 num 键的值：
+```
+# redis-cli
+127.0.0.1:6380> set num 12345
+OK
+127.0.0.1:6380> OBJECT ENCODING num
+"int"
+```
+![图 6 - int 编码的字符串对象](https://raw.githubusercontent.com/zibinli/blog/master/Redis/_v_images/20190523074125624_16057.png)
+
+#### raw 编码的字符串对象
+如果字符串对象保存的是一个字符串值，并且这个字符串值的**长度大于 32 字节**，那么字符串对象将使用**简单动态字符串（SDS）来保存这个字符串值，并将对象的编码设置为 raw。
+
+我们执行下面的 SET 命令，服务器将创建一个图 7 所示的 raw 编码的字符串对象作为 story 键的值：
+
+？？？如何设置 raw 编码的字符串对象
+
+#### embstr 编码的字符串对象
+如果字符串保存的是一个字符串值，并且这个字符串值的长度小于等于 32 字节，那么字符串对象将使用 embstr 编码的方式来保存这个字符串。
+
+embstr 编码是专门用于保存段字符串的一种优化编码方式，这种编码和 raw 编码一样，都使用 redisObject 和 sdshdr 结构来表示字符串对象。但和 raw 编码的字符串对象不同的是：
+- raw 编码会调用两次内存分配函数来分别创建 redisObject 和 sdshdr 结构
+- embstr 编码通过一次内存分配函数分配一块连续的空间，空间中依次包含 redisObject 和 sdsHdr 两个结构。
+
+相对应的，释放内存时，embstr 编码的对象也只需调用一次内存释放函数。
+
+因此，使用 embstr 编码的字符串对象来保存短字符串值有以下好处：
+- 创建字符串对象时，内存分配次数从两次降低为一次。
+- 释放 embstr 编码的字符串对象时，调用内存释放函数的次数从两次降低为一次。
+- 更好地利用缓存优势。embstr 编码的字符串对象的所有数据都保存在一块连续的内存中 ，这种方式比 raw 编码的字符串对象能够更好的利用缓存带来的优势。
+
+以下命令创建了一个 embstr 编码的字符串对象作为 msg 键的值，值对象结构如图 8。
+```
+127.0.0.1:6380> SET msg hello
+OK
+127.0.0.1:6380> OBJECT ENCODING msg
+"embstr"
+```
+![图 8 - embstr 编码的字符串对象](_v_images/20190523081623054_27949.png)
+
+#### 浮点数编码
+Redis 中，long double 类型的浮点数也是作为字符串值来保存的。
+
+我们要保存一个浮点数到字符串对象中，程序会先将这个浮点数转换成字符串值，然后再保存转换所得的字符串值。
+
+执行以下代码，将创建一个包含 3.14 的字符串表示 "3.14" 的字符串对象：
+```
+127.0.0.1:6380> SET pi 3.14
+OK
+127.0.0.1:6380> OBJECT ENCODING pi
+"embstr"
+```
+
+在有需要的时候，程序会将保存在字符串对象里的字符串值转换成浮点数值，执行某些操作，然后将所得的浮点数值转换回字符串值，继续保存在字符串对象中。
+
+比如，我们对 pi 键执行以下操作：
+```
+127.0.0.1:6380> INCRBYFLOAT pi 2.0
+"5.14"
+127.0.0.1:6380> OBJECT ENCODING pi
+"embstr"
+```
+
+对于字符串对象各个编码的情况，总结如下：
+| 值    | 编码
+|
+| :-- | :-- |
+|     |     |
+|     |     |
+|     |     |
+|     |     |
+|     |     |
