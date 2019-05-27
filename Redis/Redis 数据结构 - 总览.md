@@ -346,5 +346,77 @@ hvoid setTypeConvert(robj *setobj, int enc) {
 ```
 
 ### 6 有序集合对象
+有序集合对象的可选编码有：ziplist 和 skiplist。
 
+#### 6.1 ziplist 编码的有序集合对象
+intset 编码的集合对象使用压缩列表作为底层实现。每个集合元素使用两个紧挨在一起的压缩列表节点来保存。第一个节点保存元素的成员（member），第二个成员保存元素的分值（score）。
 
+压缩列表内的集合元素按分值从小到大排序，分值较小的元素被放置在表头的方向，而分值较大的元素则被放置在靠近表尾的方向。
+
+执行以下 SADD 命令，将创建一个如图 14 所示的 ziplist 编码的集合对象：
+```
+127.0.0.1:6379> ZADD price 8.5 apple 5.0 banana 6.0 cherry
+(integer) 3
+127.0.0.1:6379> OBJECT ENCODING price
+"ziplist"
+```
+![图 14 - ziplist 编码的有序集合对象](https://raw.githubusercontent.com/zibinli/blog/master/Redis/_v_images/20190527122407446_19652.png)
+
+底层结构 ziplist 如图 15 所示：
+![图 15 - ziplist 编码的有序集合，数据在压缩列表中按分值从小到大排列](https://raw.githubusercontent.com/zibinli/blog/master/Redis/_v_images/20190527122602034_6298.png)
+
+#### 6.2 skiplist 编码的集合对象
+skiplist 编码的集合对象使用 zset 作为底层实现。一个 zset 结构同时包含一个字典和一个跳跃表。结构源码如下：
+```
+# server.h
+typedef struct zset {
+    dict *dict;
+    zskiplist *zsl;
+} zset;
+```
+
+zset 结构中的 zsl 跳跃表按分值从小到大保存了所有集合元素，每个跳跃表节点都保存了一个集合元素。
+
+跳跃表节点的 object 属性保存了元素的成员，而跳跃表节点的 score 属性则保存了元素的分支。**程序通过这个跳跃表，对有序集合进行范围型操作。比如 ZRANK、ZRANGE 等命令就是基于跳跃表 API 来实现的。
+
+除此之外，zset 结构中的 dict 字典为有序集合创建了一个从成员到分值的映射。字典中的每个键值对都保存了一个集合元素：字典中的键保存了元素的成员，而字典的值则保存了元素的分值。通过这个字典，程序用 O(1) 复杂度查找给定成员的分值。
+
+有序集合每个元素的成员都是一个字符串对象，而每个元素的分值都是一个 double 类型的浮点数。值得一提的是，虽然 zset 结构同时使用跳跃表和字典保存了有序集合的元素，但这两种数据结构都会通过指针来共享相同元素的成员和分值，所以不会产生任何重复成员和分值，也不会因此而浪费额外的内存。
+
+如果前面 price 键创建的不是 ziplist 编码的有序集合对象，而是 skiplist 编码，那么这个有序集合对象将会如图 16 所示，而对象所使用的 zset 结果将会如图 17 所示：
+![图 16 - skiplist 编码的有序集合对象](https://raw.githubusercontent.com/zibinli/blog/master/Redis/_v_images/20190527124054221_23339.png)
+
+![图 17 - 有序集合元素同时被存放在字典和跳跃表中](https://raw.githubusercontent.com/zibinli/blog/master/Redis/_v_images/20190527124127930_234.png)
+
+图 17 中，为了展示方便，重复展示了各个元素的成员和分值。实际上，它们是共享元素的成员和分值。
+
+#### 6.3 编码转换
+当有序集合对象同时满足以下两个条件时，对象使用 ziplist 编码：
+1. 有序集合对象保存的元素数量不超过 128 个。
+2. 有序集合中保存的所有元素成员的长度都小于 64 个字节。
+
+上述条件中的临界值对应 redis.conf 文件中的配置：```zset-max-ziplist-entries``` 和 ```zset-max-ziplist-value```。
+
+对于集合对象，在新增键值对时，就会对集合元素以及键值对中的值进行检查，如果是符合条件，就会创建一个 ziplist 编码的集合对象，否则，则创建 skiplist 编码的集合对象。对应源码如下：
+```
+# t_zset.c/zaddGenericCommand
+...
+zobj = lookupKeyWrite(c->db,key);
+if (zobj == NULL) {
+    if (xx) goto reply_to_client; /* No key + XX option: nothing to do. */
+    if (server.zset_max_ziplist_entries == 0 ||
+        server.zset_max_ziplist_value < sdslen(c->argv[scoreidx+1]->ptr))
+    {
+        # 对象元素数量为 0，或者
+        zobj = createZsetObject();
+    } else {
+        zobj = createZsetZiplistObject();
+    }
+    dbAdd(c->db,key,zobj);
+} else {
+    if (zobj->type != OBJ_ZSET) {
+        addReply(c,shared.wrongtypeerr);
+        goto cleanup;
+    }
+}
+```
