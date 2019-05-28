@@ -316,17 +316,13 @@ hashtable 编码的集合对象使用字典作为底层实现，字典的每个�
 # setobj 是原始对象，enc 是目标编码。
 hvoid setTypeConvert(robj *setobj, int enc) {
     setTypeIterator *si;
-    serverAssertWithInfo(NULL,setobj,setobj->type == OBJ_SET &&
-                             setobj->encoding == OBJ_ENCODING_INTSET);
-
+    serverAssertWithInfo(NULL,setobj,setobj->type == OBJ_SET && setobj->encoding == OBJ_ENCODING_INTSET);
     if (enc == OBJ_ENCODING_HT) { // 只能转成 OBJ_ENCODING_HT 编码
         int64_t intele;
         dict *d = dictCreate(&setDictType,NULL);
         robj *element;
-
         /* Presize the dict to avoid rehashing */
         dictExpand(d,intsetLen(setobj->ptr));
-
         /* To add the elements we extract integers and create redis objects */
         si = setTypeInitIterator(setobj);
         while (setTypeNext(si,&element,&intele) != -1) {
@@ -335,7 +331,6 @@ hvoid setTypeConvert(robj *setobj, int enc) {
                                 dictAdd(d,element,NULL) == DICT_OK);
         }
         setTypeReleaseIterator(si);
-
         setobj->encoding = OBJ_ENCODING_HT;
         zfree(setobj->ptr);
         setobj->ptr = d;
