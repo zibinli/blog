@@ -59,6 +59,7 @@ encoding 属性有以下取值：
 10. OBJ_ENCODING_QUICKLIST
 
 对象的编码类型可以由 ```OBJECT ENCODING``` 命令获取。
+
 ![图 4 - 获取 key 的编码](https://raw.githubusercontent.com/zibinli/blog/master/Redis/_v_images/20190522131136463_24618.png)
 
 ```OBJECT ENCODING``` 命令对应源码如下：
@@ -92,6 +93,7 @@ char *strEncoding(int encoding) {
 |  跳跃表   |OBJ_ENCODING_SKIPLIST     |"skiplist"     |
 
 总结来看，如下图：
+
 ![图 5 - 11 种不同编码的数据对象](https://raw.githubusercontent.com/zibinli/blog/master/Redis/_v_images/20190521202055424_22716.png)
 
 十一种不同编码的对象分别是：
@@ -158,6 +160,7 @@ OK
 127.0.0.1:6380> OBJECT ENCODING msg
 "embstr"
 ```
+
 ![图 8 - embstr 编码的字符串对象](https://raw.githubusercontent.com/zibinli/blog/master/Redis/_v_images/20190523081623054_27949.png)
 
 #### 2.4 浮点数编码
@@ -207,6 +210,17 @@ int 编码的字符串对象和 embstr 编码的字符串对象在满足某些�
 #### 3.1 quicklist 编码的列表对象
 3.2 版本引入了 quicklist 编码，此编码结合了 ziplist 和 linkedlist，使用双向链表的形式，在每个节点上存储一个 ziplist，而每个 ziplist 又可以存储多个键值对。也就是说，quicklist 每个节点上存储的不是一个数据，而是一片数据。
 
+执行以下命令，服务器将会创建一个列表对象，quicklist 结构如图 8 所示：
+```
+127.0.0.1:7379> RPUSH animal 'dog' 'cat' 'pig'
+(integer) 3
+(5.12s)
+127.0.0.1:7379> OBJECT ENCODING animal
+"quicklist"
+```
+
+![图 8 - quicklist 编码的列表对象](_v_images/20190529085723132_9190.png)
+
 ### 4 哈希对象
 哈希对象的可选编码分别是：ziplist 和 hashtable。
 
@@ -226,9 +240,11 @@ ziplist 编码的哈希对象使用压缩列表作为底层实现。每当有新
 127.0.0.1:6379> OBJECT ENCODING profile
 "ziplist"
 ```
+
 ![图 9 - ziplist 编码的哈希对象]](https://raw.githubusercontent.com/zibinli/blog/master/Redis/_v_images/20190524123000055_32164.png)
 
 其中对象所使用的压缩列表如图 10 所示：
+
 ![图 10 - ziplist 编码的哈希对象中压缩列表结构]](https://raw.githubusercontent.com/zibinli/blog/master/Redis/_v_images/20190524123202076_12872.png)
 
 #### 4.2 hashtable 编码的
@@ -237,6 +253,7 @@ hashtable 编码的哈希对象使用字典作为底层实现。哈希对象中�
 - 字典中的每个值都是一个字符串对象，对象中保存了键值对的值。
 
 如果前面的 profile 键使用的是 hashtable 编码的哈希对象，那么这个哈希对象应该如图 11 所示：
+
 ![图 11 - hashtable 编码的哈希对象]](https://raw.githubusercontent.com/zibinli/blog/master/Redis/_v_images/20190524124313495_9362.png)
 
 #### 4.3 编码转换
