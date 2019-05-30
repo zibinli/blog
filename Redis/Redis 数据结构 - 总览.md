@@ -219,7 +219,7 @@ int 编码的字符串对象和 embstr 编码的字符串对象在满足某些�
 "quicklist"
 ```
 
-![图 8 - quicklist 编码的列表对象](_v_images/20190529085723132_9190.png)
+![图 8 - quicklist 编码的列表对象](https://raw.githubusercontent.com/zibinli/blog/master/Redis/_v_images/20190529085723132_9190.png)
 
 ### 4 哈希对象
 哈希对象的可选编码分别是：ziplist 和 hashtable。
