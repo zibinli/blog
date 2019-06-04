@@ -1,0 +1,63 @@
+上次我们通过问题“启动服务器，程序都干了什么？”，跟着源码，深入了解了 Redis 服务器的启动过程。
+
+既然启动了 Redis 服务器，那我们就要连上 Redis 服务干些事情。这里我们可以通过 redis-cli 测试。现在客户端和服务端都准备好了，那么**怎么 Redis 客户端和服务端如何建立连接？服务端又是如何响应客户端的请求呢？**
+
+### 1 连接服务端
+客户端和服务端进行通讯，首先应该就是建立连接。接下来，我们来看下 redis-cli 与服务端的连接过程。
+
+还记得我们上次使用 ```gdb``` 调试程序的步骤吗？让我们对 redis-cli 再来一次，看看源码的执行步骤。在开始之前，记得在编辑器打开 ```redis-cli.c```，定位到 ```main``` 函数的位置，毕竟 gdb 看代码没有编辑器看着舒服。
+
+debug 步骤如下：
+```
+# bash
+cd /opt/redis-3.2.13
+// 启动 Redis 服务。Ctrl+c 可推出服务器启动页，同时保持服务器运行
+./src/redis-server --port 8379 &
+// 调试 redis-clli
+gdb ./src/redis-cli
+# gdb 
+(gdb) b main
+(gdb) r -p 8379
+(gdb) layout src
+(gdb) focus cmd
+```
+
+执行完上述步骤，我们会进入如下界面：
+![图 1 - 进入 redis-cli main 函数](https://raw.githubusercontent.com/zibinli/blog/master/Redis/_v_images/20190604195940724_8956.png)
+
+这时候我们就可以回到编辑器页，看看对 ```main``` 函数中哪一行比较感兴趣，就停下来研究研究。到了 2618 行，我们会看到有执行 ```parseOptions``` 这个函数，看名字，好像是初始化一些可选项。那就进去看看呗。
+
+我们会看到，在执行 ```redis-cli``` 时携带的参数都是在这个函数中解析，比如我们启动的时候带着的 ```-p``` 参数，会在 996 行被解析到，同时赋值给客户端的 hostport 配置项。如下图：
+
+![图 2 - 启动 redis-cli 携带的 -p 参数被赋值给 hostport 配置项](https://raw.githubusercontent.com/zibinli/blog/master/Redis/_v_images/20190604200701003_6835.png)
+
+回到 ```main``` 函数，会看到后面的代码会出现很多 ```cliConnect``` 函数。要注意的是，这里并不表示 redis-cli 会执行多次 ```cliConnect``` 函数。实际上，每一个 ```if``` 语句块，都代表着客户端的一种连接模式，3.2.13 版本支持以下模式：
+1. Latency mode：延迟模式。```redis-cli --latency -p 8379``` 用来测试客户端与服务端连接的延迟。还有 ```--history``` 和 ```--dist``` 可选项，用来展示不同的形式。
+2. Slave mode：模拟从节点模式。
+3. Get RDB mode：生成并发送 RDB 持久化文件，保存在本地。
+4. Pipe mode：管道模式。将命令封装成指定数据格式，批量发送给 redis 服务器执行。
+5. Find big keys：统计 bigkey 的分布。
+6. Stat mode：统计模式。实时展示服务器的统计信息。
+7. Scan mode：扫描指定模式的键，相当于 scan 模式。
+8. LRU test mode：实时测试 LRU 算法的命中情况。
+
+### 1.1 初始化客户端配置
+
+### 2 发送命令请求
+
+### 3 服务端处理
+
+#### 3.1 读取命令请求
+
+#### 3.2 查找命令实现
+
+#### 3.3 执行预备操作
+
+#### 3.4 调用命令的实现函数
+
+#### 3.5 执行后续工作
+
+#### 3.6 将命令回复发送给客户端
+
+### 4 客户端接收回复
+
