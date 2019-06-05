@@ -27,9 +27,15 @@ gdb ./src/redis-cli
 
 这时候我们就可以回到编辑器页，看看对 ```main``` 函数中哪一行比较感兴趣，就停下来研究研究。到了 2618 行，我们会看到有执行 ```parseOptions``` 这个函数，看名字，好像是初始化一些可选项。那就进去看看呗。
 
+#### 1.1 初始化客户端配置
+函数执行步骤：```main``` -> ```parseOptions``` -> ```main```。
+
 我们会看到，在执行 ```redis-cli``` 时携带的参数都是在这个函数中解析，比如我们启动的时候带着的 ```-p``` 参数，会在 996 行被解析到，同时赋值给客户端的 hostport 配置项。如下图：
 
 ![图 2 - 启动 redis-cli 携带的 -p 参数被赋值给 hostport 配置项](https://raw.githubusercontent.com/zibinli/blog/master/Redis/_v_images/20190604200701003_6835.png)
+
+#### 1.2 客户端启动模式
+函数执行步骤：```main```。
 
 回到 ```main``` 函数，会看到后面的代码会出现很多 ```cliConnect``` 函数。要注意的是，这里并不表示 redis-cli 会执行多次 ```cliConnect``` 函数。实际上，每一个 ```if``` 语句块，都代表着客户端的一种连接模式，3.2.13 版本支持以下模式：
 1. Latency mode：延迟模式。```redis-cli --latency -p 8379``` 用来测试客户端与服务端连接的延迟。还有 ```--history``` 和 ```--dist``` 可选项，用来展示不同的形式。
@@ -41,7 +47,39 @@ gdb ./src/redis-cli
 7. Scan mode：扫描指定模式的键，相当于 scan 模式。
 8. LRU test mode：实时测试 LRU 算法的命中情况。
 
-### 1.1 初始化客户端配置
+#### 连接服务端
+函数执行步骤：```main``` -> ```cliConnect``` -> ```redisConnect``` -> ```redisContextInit``` -> ```redisContextConnectTcp``` -> ```_redisContextConnectTcp``` ->  ```cliConnect```。
+
+我们上面没有使用特殊模式启动，因此，我们会看到在 2687 行真正的去调用 ```cliConnect``` 函数。跟踪进去，让我们看看究竟是如何和服务端进行连接的。
+
+在  ```cliConnect``` 函数中，我们看到，根据 ```hostsocket``` 的配置项，会使用不同的连接模式。从名字上，我们大概可以猜出，一个是 TCP Socket 连接，另一个是本机 Unix Socket 连接。
+
+如果想要使用 Unix Socket 连接，只需按格式配置 ```hostscoket``` 即可：```./src/redis-cli -s /tmp/redis.sock```。
+
+我们这里使用 TCP Scoket 连接，使用 ```redisConnect``` 函数建立连接。
+
+不断追踪，我们会看到上面所示的函数执行步骤，在 ```_redisContextConnectTcp``` 函数中会看到 ```getaddrinfo``` 和 ```connect``` 函数的调用，这里就是建立 TCP 连接的地方。
+
+#### 校验权限及选择数据库
+函数执行步骤：```cliConnect``` -> ```anetKeepAlive``` -> ```cliAuth``` -> ```cliSelect``` -> ```main```。
+
+回到  ```cliConnect``` 函数，如果正常连接上服务端后，还会将我们上面创建的 TCP 连接设置为长连接，然后校验权限，选择连接数据库。
+```
+...
+/* Set aggressive KEEP_ALIVE socket option in the Redis context socket
+ * in order to prevent timeouts caused by the execution of long
+ * commands. At the same time this improves the detection of real
+ * errors. */
+anetKeepAlive(NULL, context->fd, REDIS_CLI_KEEPALIVE_INTERVAL);
+/* Do AUTH and select the right DB. */
+if (cliAuth() != REDIS_OK)
+    return REDIS_ERR;
+if (cliSelect() != REDIS_OK)
+    return REDIS_ERR;
+...
+```
+
+至此，我们已经跑完客户端与服务端建立连接的全过程。感兴趣的小伙伴可以尝试连接不存在的 IP 或 端口，观察程序抛出异常的时机，熟悉整个连接过程。
 
 ### 2 发送命令请求
 
