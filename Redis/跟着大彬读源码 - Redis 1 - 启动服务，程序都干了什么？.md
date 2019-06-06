@@ -59,6 +59,7 @@ Breakpoint 1, main (argc=2, argv=0x7fffffffe5a8) at server.c:3962
 ```
 
 出现下图所示的界面：
+
 ![图 1 - gdb 的 src 和 cmd 并存](https://raw.githubusercontent.com/zibinli/blog/master/Redis/_v_images/20190530130922292_10690.png)
 
 到了这一步，我们已经正式开始踏上 Redis 源码解读之路了。
@@ -70,6 +71,7 @@ Breakpoint 1, main (argc=2, argv=0x7fffffffe5a8) at server.c:3962
 ```
 
 回车，走你。然后我们就看到了下面这个界面：
+
 ![图 2 - 进入初始化服务器配置函数](https://raw.githubusercontent.com/zibinli/blog/master/Redis/_v_images/20190530131828651_24415.png)
 
 提示我们进入了 server.c 1464 行的 ```initServerConfig``` 函数中。 ```n``` 命令，继续走。我们会发现在这个函数里对服务器的各种基础参数进行初始化。这里的参数详见 server.h/redisServer 结构体。
@@ -77,6 +79,7 @@ Breakpoint 1, main (argc=2, argv=0x7fffffffe5a8) at server.c:3962
 回到 main 函数后，我们继续前进，还会发现一个 ```initServer()``` 的函数。这个函数是进行驱动事件的注册，以及绑定回调函数等。
 
 继续走，直到执行 ```aeMain()```，如下图：
+
 ![图 3 - Redis 服务已开启](https://raw.githubusercontent.com/zibinli/blog/master/Redis/_v_images/20190530192740390_18685.png)
 
 程序执行到 4133 行时，Redis 服务已成功开启了。此时服务器处于休眠状态，并使用 ```aeMain()``` 进行事件轮询，等待监听事件的发生。
