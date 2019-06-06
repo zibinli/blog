@@ -47,7 +47,7 @@ gdb ./src/redis-cli
 7. Scan mode：扫描指定模式的键，相当于 scan 模式。
 8. LRU test mode：实时测试 LRU 算法的命中情况。
 
-#### 连接服务端
+#### 1.3 连接服务端
 函数执行步骤：```main``` -> ```cliConnect``` -> ```redisConnect``` -> ```redisContextInit``` -> ```redisContextConnectTcp``` -> ```_redisContextConnectTcp``` ->  ```cliConnect```。
 
 我们上面没有使用特殊模式启动，因此，我们会看到在 2687 行真正的去调用 ```cliConnect``` 函数。跟踪进去，让我们看看究竟是如何和服务端进行连接的。
@@ -60,7 +60,7 @@ gdb ./src/redis-cli
 
 不断追踪，我们会看到上面所示的函数执行步骤，在 ```_redisContextConnectTcp``` 函数中会看到 ```getaddrinfo``` 和 ```connect``` 函数的调用，这里就是建立 TCP 连接的地方。
 
-#### 校验权限及选择数据库
+#### 1.4 校验权限及选择数据库
 函数执行步骤：```cliConnect``` -> ```anetKeepAlive``` -> ```cliAuth``` -> ```cliSelect``` -> ```main```。
 
 回到  ```cliConnect``` 函数，如果正常连接上服务端后，还会将我们上面创建的 TCP 连接设置为长连接，然后校验权限，选择连接数据库。
@@ -81,13 +81,76 @@ if (cliSelect() != REDIS_OK)
 
 至此，我们已经跑完客户端与服务端建立连接的全过程。感兴趣的小伙伴可以尝试连接不存在的 IP 或 端口，观察程序抛出异常的时机，熟悉整个连接过程。
 
+客户端与 服务端建立连接后，就可以使用相关命令操作数据库中的 key 了。下面我们以 ```SET KEY VALUE``` 命令为例，来看看命令的执行过程。
+
 ### 2 发送命令请求
+当用户在客户端键入一个命令请求时，客户端会将这个命令请求按协议格式转换，然后通过连接到服务端的套接字，将转换后的命令请求发送给服务端，如图 3 所示：
+
+![图 3 - 客户端接收并发送命令请求的过程](https://raw.githubusercontent.com/zibinli/blog/master/Redis/_v_images/20190605200620062_13527.png)
+
+因此，对于我们上面的命令请求，客户端会转成：
+```
+"*3\r\n$3\r\nSET\r\n$3\r\nKEY\r\n$5\r\nVALUE\r\n"
+```
+
+然后发给服务端。
 
 ### 3 服务端处理
 
 #### 3.1 读取命令请求
+当客户端与服务端之间的套接字因客户端的写入变得可读时，服务器将调用命令请求处理器执行以下操作：
+1. 读取套接字中的命令请求，并将其保存到客户端状态的输入缓冲区。
+2. 对输入缓冲区的命令请求进行分析，提取出命令请求中包含的命令参数及参数个数，然后分别将参数和参数个数保存到客户端状态的 argv 属性和 argc 属性里。
+3. 调用命令执行器，执行客户端指定的命令。
+
+上面的 ```SET``` 命令保存到客户端状态的输入缓存区之后，客户端状态如图 4。
+
+![图 4 - 客户端状态中的命令请求](https://raw.githubusercontent.com/zibinli/blog/master/Redis/_v_images/20190605220440144_29575.png)
+
+之后，分析程序将对输入缓冲区中的协议进行分析，并将得出的结果保存的客户端的 argv 和 argc 属性中，如图 5 所示：
+
+![图 5 - 客户端状态中的 argv 和 argc 属性](https://raw.githubusercontent.com/zibinli/blog/master/Redis/_v_images/20190605220637329_1161.png)
+
+之后，服务端将通过调用**命令执行器**来完成执行命令的余下步骤。
 
 #### 3.2 查找命令实现
+命令执行器要做的第一件事就是根据 argv[0] 参数，在命令表（commandtable）中查找参数所指定的命令，并将找到的命令保存到 cmd 属性中。
+
+命令表是一个字典，字典的键是一个个命令名称，比如 "SET"、"GET" 等。而字典的值则是一个个 redisCommand 结构，每个 redisCommand 结构记录了 Redis 命令的实现信息。源码如下：
+```
+# server.h/redisCommand
+struct redisCommand {
+    char *name;   // 命令名称。如 "SET"
+    redisCommandProc *proc; // 对应函数指针，指向命令的实现函数。比如 SET 对应的 setCommand 函数
+    int arity;    // 命令参数的格个数。用来检查命令请求的格式是否合法。
+                        // 要注意的命令的名称也是一个参数。像我们上面的 SET KEY VALUE 命令，实际上有三个参数。
+    char *sflags; // 字符串形式的标识值。记录了命令的属性。
+    int flags;    // 对 sflags 标识分析得出的二进制标识，由程序自动生成。检查命令时，实际上使用的是此字段
+    redisGetKeysProc *getkeys_proc; // 指针函数，通过此方法来指定 key 的位置。
+    int firstkey; // 第一个 key 的位置
+    int lastkey;  // 最后一个 key 的位置
+    int keystep;  // key 之间的间距
+    long long microseconds, calls; // 命令的总调用时间及调用次数
+};
+```
+
+另外，对于 sflags 属性，可使用的标识值及含义如下表：
+| 标识     |  意义   |  带有此标识的命令   |
+| :-: | :-: | :-: |
+|   w  |  这是一个写入命令，可能会修改数据库   |  SET、RPUSH、DEL 等   |
+|  r   |  这是一个只读命令，不会修改数据库   | GET、STRLEN 等    |
+|  m   | 此命令可能会占用大量内存，执行器需先检查内存使用情况，如果内存紧缺就禁止执行此命令    | SET、APPEND、RPUSH、SADD 等    |
+|   a  |  这是一个管理命令   | SAVE、BGSAVE 等    |
+|   p | 这是一个发布与订阅功能的命令    |  PUBLISH、SUBSRIBE 等   |
+|   f |     |     |
+|    s |  这个命令不可以在 lua 脚步中使用   |   BPOP、BLPOP 等  |
+|   R  |   这是一个随机命令。对于相同的数据集和相同的参数，返回结果可能不同  | SPOP、SRANDMEMBER 等    |
+|   S  | 当在 lua 脚步中使用此命令时，对返回结果进行排序，使得结果有序    | SINTER、SUNION 等    |
+|   l  |  这个命令可以在服务器载入数据的过程中使用   |INFO、PUBLISH 等     |
+|   t  |  这个命令允许在从库有过期数据时使用   | SLAVEOF、PING 等    |
+|   M  | 这个命令在监视模式下，不会被自动传播    |   EXEC  |
+|   k  | 集群模式下，如果对应槽点标记位“导入”，则接受此命令 |   restore-asking  |
+|   F  | 这个命令在程序执行时应该立刻执行    | SETNX、GET 等    |
 
 #### 3.3 执行预备操作
 
