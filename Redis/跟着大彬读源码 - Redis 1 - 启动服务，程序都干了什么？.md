@@ -172,6 +172,7 @@ initServerConfig 函数设置的服务器状态属性基本上都是一些整数
 - 初始化服务器的后台 IO 模块，为 IO 操作做好准备。
 
 当 ```initServer``` 函数执行完毕之后，服务器将用 ASCII 字符在日志中打印出我们常见到的 Redis 图标，以及 Redis 的版本号信息等。
+
 ![图 4 - 服务器启动后打印的 Redis 图标和版本信息等](https://raw.githubusercontent.com/zibinli/blog/master/Redis/_v_images/20190531131316405_24966.png)
 
 ### 4 其它操作
