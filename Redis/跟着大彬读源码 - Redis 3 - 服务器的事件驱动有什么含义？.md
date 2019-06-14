@@ -164,8 +164,9 @@ gdb ./src/redis-server
 
 现在，我们再来认识命令的执行过程。
 
+
+
 ![图 7 - 服务器执行命令的堆栈信息](https://raw.githubusercontent.com/zibinli/blog/master/Redis/_v_images/20190614180606647_15447.png)
 
-要注意的是，每次执行命令，实际上都需要经过**连接服务器**的步骤。也就是说，
 
 ### 2 时间事件
