@@ -62,8 +62,107 @@ Redis 在 IO 多路复用程序的实现源码中用 ```#include``` 宏定义了
 
 #### 1.3 事件的类型
 IO 多路复用程序可以监听多个套接字的 ```ae.h/AE_READABLE``` 和 ```ae.h/AE_WRITABLE``` 事件，这两类事件和套接字操作之间有以下对应关系：
-- **当套接字变得可读时，套接字会产生 AE_READABLE 事件**。此处的套接字可读，是指客户端对套接字执行 write、close 操作，或者有新的可应答（acceptable）套接字出现时（客户端对服务器的监听套接字执行 connect 操作），套接字会产生 AE_READABLE 事件。
-- **当套接字变得可写时，套接字会产生 AE_WRITABLE 事件。**
+- **当服务器套接字变得可读时，套接字会产生 AE_READABLE 事件**。此处的套接字可读，是指客户端对套接字执行 write、close 操作，或者有新的可应答（acceptable）套接字出现时（客户端对服务器的监听套接字执行 connect 操作），套接字会产生 AE_READABLE 事件。
+- **当服务器套接字变得可写时，套接字会产生 AE_WRITABLE 事件。**
+
+IO 多路复用程序允许服务器同时监听套接字的 AR_READABLE 事件和 AE_WRITABLE 事件。如果一个套接字同时产生了两个事件，那么文件分派器会优先处理 AE_READABLE 事件，然后再处理 AE_WRITABLE 事件。简单来说，如果一个套接字既可读又可写，那么服务器将先读套接字，后写套接字。
+
+#### 1.4 文件事件处理器
+Redis 为文件事件编写了多个处理器，这些事件处理器分别用于实现不同的网络通信需求。比如说：
+- 为了对连接服务器的各个客户端进行应答，服务器要**为监听套接字关联连接应答处理器**。
+- 为了接收客户端传了的命令请求，服务器要**为客户端套接字关联命令请求处理器**。
+- 为了向客户端返回命令执行结果，服务器要**为客户端套接字关联命令回复处理器**。
+- 当主服务器和从服务器进行复制操作时，**主从服务器都需要关联复制处理器**。
+
+在这些事件处理器中，服务器最常用的是**与客户端进行通信的连接应答处理器、命令请求处理器和命令回复处理器**。
+
+**1）连接应答处理器**
+
+```networking.c/acceptTcpHandle``` 函数是 Redis 的连接应答处理器，这个处理器用于对连接服务器监听套接字的客户端进行应答，具体实现为 ```sys/socket.h/accept``` 函数的包装。
+
+当 Redis 服务器进行初始化的时候，程序会将这个连接应答处理器和服务器监听套接字的 AE_READABLE 事件关联。对应源码如下
+```
+# server.c/initServer
+...
+/* Create an event handler for accepting new connections in TCP and Unix
+ * domain sockets. */
+for (j = 0; j < server.ipfd_count; j++) {
+    if (aeCreateFileEvent(server.el, server.ipfd[j], AE_READABLE,
+        acceptTcpHandler,NULL) == AE_ERR)
+        {
+            serverPanic(
+                "Unrecoverable error creating server.ipfd file event.");
+        }
+}
+...
+```
+
+当有客户端用 ```sys/scoket.h/connect``` 函数连接服务器监听套接字时，套接字就会产生 AE_READABLE 事件，引发连接应答处理器执行，并执行相应的套接字应答操作。如图 4 所示：
+
+![图 4 - 服务器对客户端的连接请求进行应答](https://raw.githubusercontent.com/zibinli/blog/master/Redis/_v_images/20190614123503033_20651.png)
+
+**2）命令请求处理器**
+```networking.c/readQueryFromClient``` 函数是 Redis 的命令请求处理器，这个处理器负责从套接字中读入客户端发送的命令请求内容，具体实现为 ```unistd.h/read``` 函数的包装。
+
+当一个客户端通过连接应答处理器成功连接到服务器之后，服务器会将客户端套接字的 AE_READABLE 事件和命令请求处理器关联起来（```networking.c/acceptCommonHandler``` 函数）。
+
+当客户端向服务器发送命令请求的时候，套接字就会产生 AR_READABLE 事件，引发命令请求处理器执行，并执行相应的套接字读入操作，如图 5 所示：
+
+![图 5 - 服务器接收客户端发来的命令请求](https://raw.githubusercontent.com/zibinli/blog/master/Redis/_v_images/20190614124918037_1589.png)
+
+在客户端连接服务器的整个过程中，服务器都会一直为客户端套接字的 AE_READABLE 事件关联命令请求处理器。
+
+**3）命令回复处理器**
+```networking.c/sendReplToClient``` 函数是 Redis 的命令回复处理器，这个处理器负责将服务器执行命令后得到的命令回复通过套接字返回给客户端。
+
+当服务器有命令回复需要发给客户端时，服务器会将客户端套接字的 AE_WRITABLE 事件和命令回复处理器关联（```networking.c/handleClientsWithPendingWrites``` 函数）。
+
+当客户端准备好接收服务器传回的命令回复时，就会产生 AE_WRITABLE 事件，引发命令回复处理器执行，并执行相应的套接字写入操作。如图 6 所示：
+
+![图 6 - 服务器向客户端发送命令回复](https://raw.githubusercontent.com/zibinli/blog/master/Redis/_v_images/20190614125858054_14856.png)
+
+当命令回复发送完毕之后，服务器就会解除命令回复处理器与客户端套接字的 AE_WRITABLE 事件的关联。对应源码如下：
+```
+# networking.c/writeToClient
+...
+if (!clientHasPendingReplies(c)) {
+    c->sentlen = 0;
+    # buffer 缓冲区命令回复已发送，删除套接字和事件的关联
+    if (handler_installed) aeDeleteFileEvent(server.el,c->fd,AE_WRITABLE);
+
+    /* Close connection after entire reply has been sent. */
+    if (c->flags & CLIENT_CLOSE_AFTER_REPLY) {
+        freeClient(c);
+        return C_ERR;
+    }
+}
+...
+```
+
+#### 1.5 客户端与服务器连接事件
+之前我们通过 debug 的形式大致认识了客户端与服务器的连接过程。现在，我们站在文件事件的角度，再一次来追踪 Redis 客户端与服务器进行连接并发送命令的整个过程，看看在过程中会产生什么事件，这些事件又是如何被处理的。
+
+另外，对于套接字这个抽象概念，我们可能难以想象，接下来，我们结合使用 ip-port 的形式来认识整个过程。
+
+先来看客户端与服务器建立连接的过程：
+1. 先启动我们的 Redis 服务器（127.0.0.1-8379）。成功启动后，服务器套接字（127.0.0.1-8379） AE_READABLE 事件正处于被监听状态，而该事件对应连接应答处理器。（```server.c/initServer()```）。
+2. 使用 redis-cli 连接服务器。这是，服务器套接字（127.0.0.1-8379）将产生 AR_READABLE 事件，触发连接应答处理器执行（```networking.c/acceptTcpHandler()```）。
+3. 对客户端的连接请求进行应答，创建客户端套接字，保存客户端状态信息，并将客户端套接字的 AE_READABLE 事件与命令请求处理器（```networking.c/acceptCommonHandler()```）进行关联，使得服务器可以接收该客户端发来的命令请求。 
+
+此时，客户端已成功与服务器建立连接了。上述过程，我们仍然可以用 gdb 调试，查看函数的执行过程。具体调试过程如下：
+```
+gdb ./src/redis-server
+(gdb) b acceptCommonHandler    # 给 acceptCommonHandler 函数设置断点
+(gdb) r redis-conf --port 8379 # 启动服务器
+```
+
+另外开一个窗口，使用 redis-cli 连接服务器：```redis-cli -p 8379```
+
+回到服务器窗口，我们会看到已进入 gdb 调试模式，输入：```info stack```，可以看到如图 6 所示的堆栈信息。
+
+![图 6 - gdb 调试显示客户端连接时服务器的堆栈信息](https://raw.githubusercontent.com/zibinli/blog/master/Redis/_v_images/20190614133035004_12904.png)
+
+现在，我们再来认识命令的执行过程。
 
 
 ### 2 时间事件
