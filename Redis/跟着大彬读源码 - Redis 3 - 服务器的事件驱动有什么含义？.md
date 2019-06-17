@@ -165,8 +165,9 @@ gdb ./src/redis-server
 2. 根据客户端发送命令内容，格式化客户端 argc、argv 等相关值属性值；
 3. 根据命令名称查找对应函数。```server.c/processCommad()``` 中 ```lookupCommand``` 函数调用；
 4. 执行与命令名关联的函数，获得返回结果，客户端套接字产生 。```server.c/processCommad()``` 中 ```call``` 函数调用。
-5. 返回命令回复。```ae.c/aeMain()``` 中 ```server.c/beforesleep``` 函数调用。
+5. 返回命令回复，删除客户端套接字与 AE_WRITABLE 事件的关联。```network.c/writeToClient()``` 函数。
 
+图 7 展示了命令执行过程的堆栈信息。图 8 则展示了命令回复过程的堆栈信息。
 ![图 7 - 服务器执行命令的堆栈信息](https://raw.githubusercontent.com/zibinli/blog/master/Redis/_v_images/20190614180606647_15447.png)
 
 
