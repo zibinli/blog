@@ -142,8 +142,6 @@ if (!clientHasPendingReplies(c)) {
 #### 1.5 客户端与服务器连接事件
 之前我们通过 debug 的形式大致认识了客户端与服务器的连接过程。现在，我们站在文件事件的角度，再一次来追踪 Redis 客户端与服务器进行连接并发送命令的整个过程，看看在过程中会产生什么事件，这些事件又是如何被处理的。
 
-另外，对于套接字这个抽象概念，我们可能难以想象，接下来，我们结合使用 ip-port 的形式来认识整个过程。
-
 先来看客户端与服务器建立连接的过程：
 1. 先启动我们的 Redis 服务器（127.0.0.1-8379）。成功启动后，服务器套接字（127.0.0.1-8379） AE_READABLE 事件正处于被监听状态，而该事件对应连接应答处理器。（```server.c/initServer()```）。
 2. 使用 redis-cli 连接服务器。这是，服务器套接字（127.0.0.1-8379）将产生 AR_READABLE 事件，触发连接应答处理器执行（```networking.c/acceptTcpHandler()```）。
@@ -162,11 +160,16 @@ gdb ./src/redis-server
 
 ![图 6 - gdb 调试显示客户端连接时服务器的堆栈信息](https://raw.githubusercontent.com/zibinli/blog/master/Redis/_v_images/20190614133035004_12904.png)
 
-现在，我们再来认识命令的执行过程。
-
-
+现在，我们再来认识命令的执行过程：
+1. 客户端向服务器发送一个命令请求，客户端套接字产生 AE_READABLE 事件，引发命令请求处理器（readQueryFromClient）执行，读取客户端的命令内容；
+2. 根据客户端发送命令内容，格式化客户端 argc、argv 等相关值属性值；
+3. 根据命令名称查找对应函数。```server.c/processCommad()``` 中 ```lookupCommand``` 函数调用；
+4. 执行与命令名关联的函数，获得返回结果，客户端套接字产生 。```server.c/processCommad()``` 中 ```call``` 函数调用。
+5. 返回命令回复。```ae.c/aeMain()``` 中 ```server.c/beforesleep``` 函数调用。
 
 ![图 7 - 服务器执行命令的堆栈信息](https://raw.githubusercontent.com/zibinli/blog/master/Redis/_v_images/20190614180606647_15447.png)
 
+
+![图 8 - 命令回复的堆栈信息](https://raw.githubusercontent.com/zibinli/blog/master/Redis/_v_images/20190617195653689_22592.png)
 
 ### 2 时间事件
