@@ -174,3 +174,32 @@ gdb ./src/redis-server
 ![图 8 - 命令回复的堆栈信息](https://raw.githubusercontent.com/zibinli/blog/master/Redis/_v_images/20190617195653689_22592.png)
 
 ### 2 时间事件
+Redis 的时间时间分为以下两类：
+- **定时时间**：让一段程序在指定的时间之后执行一次。比如，让程序 M 在当前时间的 60 毫秒后执行一次。
+- **周期性事件**：让一段程序每隔指定时间就执行一次。比如，让程序 N 每隔 30 毫秒执行一次。
+
+对于时间事件，数据结构源码（ae.h/aeTimeEvent）：
+```
+/* Time event structure */
+typedef struct aeTimeEvent {
+    long long id; /* time event identifier. */
+    long when_sec; /* seconds */
+    long when_ms; /* milliseconds */
+    aeTimeProc *timeProc;
+    aeEventFinalizerProc *finalizerProc;
+    void *clientData;
+    struct aeTimeEvent *next;
+} aeTimeEvent;
+```
+
+主要属性说明：
+- id：服务器为时间事件创建的全局唯一 ID。ID 号按从小到大的顺序递增。
+- when_sec：秒精度的 UNIX 时间戳，记录了时间事件的到达时间。
+- when_ms：毫秒精度的 UNIX 时间戳，记录了时间事件的到达时间。
+- timeProc：时间事件处理器，对应一个函数。当时间事件发生时，服务器就会调用相应的处理器来处理事件。
+
+时间事件进程执行的函数为 ```ae.c/processTimeEvents()```。
+
+此外，对于时间事件的类型区分，取决于时间事件处理器的返回值：
+- 返回值是 ``ae.h/AE_NOMORE``，为**定时事件**。该事件在到达一次后就会被删除；
+- 返回值不是 ``ae.h/AE_NOMORE``，为**周期事件**。当一个周期时间事件到达后，服务器会根据事件处理器返回的值，对时间事件的 when_sec 和 when_ms 属性进行更新，让这个事件在一段时间之后再次到达，并以这种方式一致更新运行。比如，如果一个时间事件处理器返回 30，那么服务器应该对这个时间事件进行更新，让这个事件在 30 毫秒后再次执行。
