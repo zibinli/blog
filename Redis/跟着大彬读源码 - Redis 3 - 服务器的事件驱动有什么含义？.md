@@ -4,6 +4,115 @@
 - **文件事件（file event）**：Redis 服务器通过套接字与客户端进行连接，而文件事件就是服务器对套接字操作的抽象。服务器与客户端的通信会产生相应的文件事件，而服务器则通过监听并处理这些事件来完成一系列的网络通信操作。
 - **时间时间（time event）**：Redis 服务器中的一些操作（比如 serverCron 函数）需要在给定的时间点执行，而时间事件就是服务器对这类定时操作的抽象。
 
+### 事件调度与执行
+由于服务器同时存在文件事件和时间事件，所以服务器必须对这两种事件进行调度，来决定何时处理文件事件，何时处理时间事件，以及花多少时间来处理它们等等。
+
+事件的调度和执行有 ```ae.c/aeProcessEvents()``` 函数负责。源码如下：
+```
+int aeProcessEvents(aeEventLoop *eventLoop, int flags)
+{
+    int processed = 0, numevents;
+    /* Nothing to do? return ASAP */
+    if (!(flags & AE_TIME_EVENTS) && !(flags & AE_FILE_EVENTS)) return 0;
+
+    /* 首先判断是否存在需要监听的文件事件，如果存在需要监听的文件事件，那么通过IO多路复用程序获取
+     * 准备就绪的文件事件，至于IO多路复用程序是否等待以及等待多久的时间，依发生时间距离现在最近的时间事件确定;
+     * 如果eventLoop->maxfd == -1表示没有需要监听的文件事件，但是时间事件肯定是存在的(serverCron())，
+     * 如果此时没有设置 AE_DONT_WAIT 标志位，此时调用IO多路复用，其目的不是为了监听文件事件是否准备就绪，
+     * 而是为了使线程休眠到发生时间距离现在最近的时间事件的发生时间(作用类似于unix中的sleep函数),
+     * 这种休眠操作的目的是为了避免线程一直不停的遍历时间事件形成的无序链表，造成不必要的资源浪费 */
+    if (eventLoop->maxfd != -1 ||
+        ((flags & AE_TIME_EVENTS) && !(flags & AE_DONT_WAIT))) {
+        int j;
+        aeTimeEvent *shortest = NULL;
+        struct timeval tv, *tvp;
+
+        /* 寻找发生时间距离现在最近的时间事件,该时间事件的发生时间与当前时间之差就是IO多路复用程序应该等待的时间 */
+        if (flags & AE_TIME_EVENTS && !(flags & AE_DONT_WAIT))
+            shortest = aeSearchNearestTimer(eventLoop);
+        if (shortest) {
+            long now_sec, now_ms;
+
+            // 创建 timeval 结构
+            aeGetTime(&now_sec, &now_ms);
+            tvp = &tv;
+
+            /* How many milliseconds we need to wait for the next
+             * time event to fire? */
+            long long ms =
+                (shortest->when_sec - now_sec)*1000 +
+                shortest->when_ms - now_ms;
+
+            /* 如果时间之差大于0，说明时间事件到时时间未到,则等待对应的时间;
+             * 如果时间间隔小于0，说明时间事件已经到时，此时如果没有
+             * 文件事件准备就绪，那么IO多路复用程序应该立即返回，以免
+             * 耽误处理时间事件*/
+            if (ms > 0) {
+                tvp->tv_sec = ms/1000;
+                tvp->tv_usec = (ms % 1000)*1000;
+            } else {
+                tvp->tv_sec = 0;
+                tvp->tv_usec = 0;
+            }
+        } else {
+            /* If we have to check for events but need to return
+             * ASAP because of AE_DONT_WAIT we need to set the timeout
+             * to zero */
+            if (flags & AE_DONT_WAIT) {
+                tv.tv_sec = tv.tv_usec = 0;
+                tvp = &tv;
+            } else {
+                /* Otherwise we can block */
+                tvp = NULL; /* wait forever */
+            }
+        }
+
+        // 阻塞并等等文件事件产生，最大阻塞事件由 timeval 结构决定
+        numevents = aeApiPoll(eventLoop, tvp);
+        for (j = 0; j < numevents; j++) {
+            // 处理所有已产生的文件事件
+            aeFileEvent *fe = &eventLoop->events[eventLoop->fired[j].fd];
+            int mask = eventLoop->fired[j].mask;
+            int fd = eventLoop->fired[j].fd;
+            int fired = 0; /* Number of events fired for current fd. */
+            int invert = fe->mask & AE_BARRIER;
+
+            if (!invert && fe->mask & mask & AE_READABLE) {
+                fe->rfileProc(eventLoop,fd,fe->clientData,mask);
+                fired++;
+            }
+
+            /* Fire the writable event. */
+            if (fe->mask & mask & AE_WRITABLE) {
+                if (!fired || fe->wfileProc != fe->rfileProc) {
+                    fe->wfileProc(eventLoop,fd,fe->clientData,mask);
+                    fired++;
+                }
+            }
+
+            /* If we have to invert the call, fire the readable event now
+             * after the writable one. */
+            if (invert && fe->mask & mask & AE_READABLE) {
+                if (!fired || fe->wfileProc != fe->rfileProc) {
+                    fe->rfileProc(eventLoop,fd,fe->clientData,mask);
+                    fired++;
+                }
+            }
+
+            processed++;
+        }
+    }
+    /* Check time events */
+    if (flags & AE_TIME_EVENTS)
+        // 处理所有已到达的时间事件
+        processed += processTimeEvents(eventLoop);
+
+    return processed; /* return the number of processed file/time events */
+}
+```
+
+将 ```aeProcessEvents``` 函数置于一个循环里面，加上初始化和清理函数，就构成了 Redis 服务器的主函数 ```server.c/main()```。以下是主函数的
+
 接下来，我们分别来认识下文件事件和时间事件。
 
 ### 1 文件事件
@@ -203,3 +312,16 @@ typedef struct aeTimeEvent {
 此外，对于时间事件的类型区分，取决于时间事件处理器的返回值：
 - 返回值是 ``ae.h/AE_NOMORE``，为**定时事件**。该事件在到达一次后就会被删除；
 - 返回值不是 ``ae.h/AE_NOMORE``，为**周期事件**。当一个周期时间事件到达后，服务器会根据事件处理器返回的值，对时间事件的 when_sec 和 when_ms 属性进行更新，让这个事件在一段时间之后再次到达，并以这种方式一致更新运行。比如，如果一个时间事件处理器返回 30，那么服务器应该对这个时间事件进行更新，让这个事件在 30 毫秒后再次执行。
+
+#### 时间事件之 serverCron 函数
+持续运行的 Redis 服务器需要定期对自身的资源和状态进行检查和调整，从而确保服务可以长期、稳定的运行。这些定期操作由 ```server.c/serverCron()``` 函数负责执行。主要操作包括：
+- 更新服务器的各类统计信息。比如时间、内存占用、数据库占用情况等。
+- 清理数据库中的过期键值对。
+- 关闭和清理连接失效的客户端。
+- 尝试进行 AOF 或 RDB 持久化操作。
+- 如果服务器是主服务器，对从 服务器进行定期同步。
+- 如果处于集群模式，对集群进行定期同步和连接测试。
+
+Redis 服务器以周期性事件的方式来运行 serverCron 函数，在服务器运行期间，每隔一段时间，serverCron 就会执行一次，直到服务器关闭为止。
+
+关于执行次数，可参见 ```redis.conf``` 文件中的 **hz** 选项。默认为 10，表示每秒运行 10 次。
