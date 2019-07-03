@@ -50,13 +50,11 @@ encoding 属性有以下取值：
 1. OBJ_ENCODING_RAW
 2. OBJ_ENCODING_INT
 3. OBJ_ENCODING_HT
-4. OBJ_ENCODING_ZIPMAP
-5. OBJ_ENCODING_LINKEDLIST
-6. OBJ_ENCODING_ZIPLIST
-7. OBJ_ENCODING_INTSET
-8. OBJ_ENCODING_SKIPLIST
-9. OBJ_ENCODING_EMBSTR
-10. OBJ_ENCODING_QUICKLIST
+4. OBJ_ENCODING_QUICKLIST
+5. OBJ_ENCODING_ZIPLIST
+6. OBJ_ENCODING_INTSET
+7. OBJ_ENCODING_SKIPLIST
+8. OBJ_ENCODING_EMBSTR
 
 对象的编码类型可以由 ```OBJECT ENCODING``` 命令获取。
 
@@ -430,3 +428,9 @@ if (zobj == NULL) {
     }
 }
 ```
+
+### 总结
+1. Redis 自己实现了一套**对象系统**来实现所有功能。
+2. 对象有**对象类型**和**对象编码**。
+3. 对象类型对应**字符串、列表、哈希、集合、有序集合五种**。
+4. 对象编码对应**跳跃表、压缩列表、集合、动态字符串等八种底层数据结构**。
