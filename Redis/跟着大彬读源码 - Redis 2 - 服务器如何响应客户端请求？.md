@@ -218,6 +218,14 @@ client->cmd->proc(client);
 
 以图 9 所示的客户端状态为例，当客户端的套接字变为可写状态时，命令回复处理器会将协议格式的命令回复 "+OK\r\n" 发送给客户端。
 
+#### 3.7 源码解读
+命令处理请求，函数调用堆栈信息如图 3-7-1：
+
+![图 3-7-1：命令执行过程函数堆栈信息](https://raw.githubusercontent.com/zibinli/blog/master/Redis/_v_images/20190614180606647_15447.png)
+
+命令回复，函数调用堆栈信息如图 3-7-2：
+![图 3-7-2：命令回复函数堆栈信息](https://raw.githubusercontent.com/zibinli/blog/master/Redis/_v_images/20190617195653689_22592.png)
+
 ### 4 客户端接收并打印回复
 客户端接收到命令回复之后，会将回复转换成我们可读的格式，并打印在屏幕上（对于 redis-cli 客户端），如图 10 所示。
 
@@ -225,3 +233,8 @@ client->cmd->proc(client);
 
 
 至此，我们走完了从发起一个命令请求，到收到回复的所有过程。对于我们最开始提的问题，服务器如何响应客户端请求，你有答案了吗？
+
+### 总结
+1. 相应请求，首先要启动服务，连接上服务器。
+2. 服务器通过 ```networking.c/readQueryFromClient()``` 读取和执行对应命令。
+3. 服务器通过 ```networking.c/writeToClient()``` 将命令回复发送给客户端。
