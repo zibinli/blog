@@ -23,6 +23,7 @@ gdb ./src/redis-cli
 ```
 
 执行完上述步骤，我们会进入如下界面：
+
 ![图 1 - 进入 redis-cli main 函数](https://raw.githubusercontent.com/zibinli/blog/master/Redis/_v_images/20190604195940724_8956.png)
 
 这时候我们就可以回到编辑器页，看看对 ```main``` 函数中哪一行比较感兴趣，就停下来研究研究。到了 2618 行，我们会看到有执行 ```parseOptions``` 这个函数，看名字，好像是初始化一些可选项。那就进去看看呗。
