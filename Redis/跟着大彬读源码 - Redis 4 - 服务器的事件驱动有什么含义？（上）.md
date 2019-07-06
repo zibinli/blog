@@ -98,7 +98,7 @@ for (j = 0; j < server.ipfd_count; j++) {
 
 当有客户端用 ```sys/scoket.h/connect``` 函数连接服务器监听套接字时，套接字就会产生 AE_READABLE 事件，引发连接应答处理器执行，并执行相应的套接字应答操作。如图 4 所示：
 
-![图 4 - 服务器对客户端的连接请求进行应答](https://raw.githubusercontent.com/zibinli/blog/master/Redis/_v_images/20190614123503033_20652.png)
+![图 4 - 服务器对客户端的连接请求进行应答](https://raw.githubusercontent.com/zibinli/blog/master/Redis/_v_images/20190614123503033_20651.png)
 
 **2）命令请求处理器**
 ```networking.c/readQueryFromClient``` 函数是 Redis 的命令请求处理器，这个处理器负责从套接字中读入客户端发送的命令请求内容，具体实现为 ```unistd.h/read``` 函数的包装。
