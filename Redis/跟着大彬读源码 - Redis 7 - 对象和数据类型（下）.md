@@ -22,11 +22,11 @@ ziplist 编码的哈希对象使用压缩列表作为底层实现。每当有新
 "ziplist"
 ```
 
-![图 9 - ziplist 编码的哈希对象]](https://raw.githubusercontent.com/zibinli/blog/master/Redis/_v_images/20190524123000055_32164.png)
+![图 9 - ziplist 编码的哈希对象](https://raw.githubusercontent.com/zibinli/blog/master/Redis/_v_images/20190524123000055_32164.png)
 
 其中对象所使用的压缩列表如图 10 所示：
 
-![图 10 - ziplist 编码的哈希对象中压缩列表结构]](https://raw.githubusercontent.com/zibinli/blog/master/Redis/_v_images/20190524123202076_12872.png)
+![图 10 - ziplist 编码的哈希对象中压缩列表结构](https://raw.githubusercontent.com/zibinli/blog/master/Redis/_v_images/20190524123202076_12872.png)
 
 #### 1.2 hashtable 编码的
 hashtable 编码的哈希对象使用字典作为底层实现。哈希对象中的每个键值对都使用一个字典键值对来保存：
@@ -35,7 +35,7 @@ hashtable 编码的哈希对象使用字典作为底层实现。哈希对象中�
 
 如果前面的 profile 键使用的是 hashtable 编码的哈希对象，那么这个哈希对象应该如图 11 所示：
 
-![图 11 - hashtable 编码的哈希对象]](https://raw.githubusercontent.com/zibinli/blog/master/Redis/_v_images/20190524124313495_9362.png)
+![图 11 - hashtable 编码的哈希对象](https://raw.githubusercontent.com/zibinli/blog/master/Redis/_v_images/20190524124313495_9362.png)
 
 #### 1.3 编码转换
 当哈希对象同时符合下面两个条件时，将使用 ziplist 编码：
@@ -78,7 +78,7 @@ intset 编码的集合对象使用整数集合作为底层实现，集合对象�
 127.0.0.1:6379> OBJECT ENCODING numbers
 "intset"
 ```
-![图 12 - intset 编码的集合对象]](https://raw.githubusercontent.com/zibinli/blog/master/Redis/_v_images/20190524131821117_3903.png)
+![图 12 - intset 编码的集合对象](https://raw.githubusercontent.com/zibinli/blog/master/Redis/_v_images/20190524131821117_3903.png)
 
 #### 2.2 hashtable 编码的集合对象
 hashtable 编码的集合对象使用字典作为底层实现，字典的每个键都是一个字符串对象，每个字符串对象中又包含了一个集合元素，而字典的值则全部设置为 NULL。
@@ -90,7 +90,7 @@ hashtable 编码的集合对象使用字典作为底层实现，字典的每个�
 127.0.0.1:6379> OBJECT ENCODING fruits
 "hashtable"
 ```
-![图 13 - hashtable 编码的集合对象]](https://raw.githubusercontent.com/zibinli/blog/master/Redis/_v_images/20190524131844230_29702.png)
+![图 13 - hashtable 编码的集合对象](https://raw.githubusercontent.com/zibinli/blog/master/Redis/_v_images/20190524131844230_29702.png)
 
 #### 2.3 编码转换
 当集合对象同时满足以下两个条件时，对象使用 intset 编码：
@@ -151,6 +151,7 @@ intset 编码的集合对象使用压缩列表作为底层实现。每个集合�
 127.0.0.1:6379> OBJECT ENCODING price
 "ziplist"
 ```
+
 ![图 14 - ziplist 编码的有序集合对象](https://raw.githubusercontent.com/zibinli/blog/master/Redis/_v_images/20190527122407446_19652.png)
 
 底层结构 ziplist 如图 15 所示：
