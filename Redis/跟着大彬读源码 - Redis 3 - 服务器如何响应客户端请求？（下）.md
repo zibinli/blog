@@ -41,21 +41,21 @@ struct redisCommand {
 ```
 
 另外，对于 sflags 属性，可使用的标识值及含义如下表：
-| 标识     |  意义   |  带有此标识的命令   |
-| :-: | --- | --- |
-|   w  |  这是一个写入命令，可能会修改数据库   |  SET、RPUSH、DEL 等   |
-|  r   |  这是一个只读命令，不会修改数据库   | GET、STRLEN 等    |
-|  m   | 此命令可能会占用大量内存，执行器需先检查内存使用情况，如果内存紧缺就禁止执行此命令    | SET、APPEND、RPUSH、SADD 等    |
-|   a  |  这是一个管理命令   | SAVE、BGSAVE 等    |
-|   p | 这是一个发布与订阅功能的命令    |  PUBLISH、SUBSRIBE 等   |
-|    s |  这个命令不可以在 lua 脚步中使用   |   BPOP、BLPOP 等  |
-|   R  |   这是一个随机命令。对于相同的数据集和相同的参数，返回结果可能不同  | SPOP、SRANDMEMBER 等    |
-|   S  | 当在 lua 脚步中使用此命令时，对返回结果进行排序，使得结果有序    | SINTER、SUNION 等    |
-|   l  |  这个命令可以在服务器载入数据的过程中使用   |INFO、PUBLISH 等     |
-|   t  |  这个命令允许在从库有过期数据时使用   | SLAVEOF、PING 等    |
-|   M  | 这个命令在监视模式下，不会被自动传播    |   EXEC  |
-|   k  | 集群模式下，如果对应槽点标记位“导入”，则接受此命令 |   restore-asking  |
-|   F  | 这个命令在程序执行时应该立刻执行    | SETNX、GET 等    |
+标识     |  意义   |  带有此标识的命令
+:-: | --- | --- 
+w  |  这是一个写入命令，可能会修改数据库   |  SET、RPUSH、DEL 等
+r   |  这是一个只读命令，不会修改数据库   | GET、STRLEN 等
+m   | 此命令可能会占用大量内存，执行器需先检查内存使用情况，如果内存紧缺就禁止执行此命令    | SET、APPEND、RPUSH、SADD 等
+a  |  这是一个管理命令   | SAVE、BGSAVE 等
+p | 这是一个发布与订阅功能的命令    |  PUBLISH、SUBSRIBE 等
+s |  这个命令不可以在 lua 脚步中使用   |   BPOP、BLPOP 等
+R  |   这是一个随机命令。对于相同的数据集和相同的参数，返回结果可能不同  | SPOP、SRANDMEMBER 等
+S  | 当在 lua 脚步中使用此命令时，对返回结果进行排序，使得结果有序    | SINTER、SUNION 等
+l  |  这个命令可以在服务器载入数据的过程中使用   |INFO、PUBLISH 等
+t  |  这个命令允许在从库有过期数据时使用   | SLAVEOF、PING 等
+M  | 这个命令在监视模式下，不会被自动传播    |   EXEC
+k  | 集群模式下，如果对应槽点标记位“导入”，则接受此命令 |   restore-asking
+F  | 这个命令在程序执行时应该立刻执行    | SETNX、GET 等
 
 命令表结构如图 6：
 
@@ -133,7 +133,7 @@ client->cmd->proc(client);
 ### 2 客户端接收并打印回复
 客户端接收到命令回复之后，会将回复转换成我们可读的格式，并打印在屏幕上（对于 redis-cli 客户端），如图 10 所示。
 
-![图 10 客户端接收并打印命令回复的过程](https://raw.githubusercontent.com/zibinli/blog/master/Redis/_v_images/20190612080448952_13251.png)
+![图 10 客户端接收并打印命令回复的过程](https://raw.githubusercontent.com/zibinli/blog/master/Redis/_v_images/20190612080448952_13253.png)
 
 
 至此，我们走完了从发起一个命令请求，到收到回复的所有过程。对于我们最开始提的问题，服务器如何响应客户端请求，你有答案了吗？
