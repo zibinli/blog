@@ -42,13 +42,12 @@ struct redisCommand {
 
 另外，对于 sflags 属性，可使用的标识值及含义如下表：
 | 标识     |  意义   |  带有此标识的命令   |
-| :-: | :-: | :-: |
+| :-: | --- | --- |
 |   w  |  这是一个写入命令，可能会修改数据库   |  SET、RPUSH、DEL 等   |
 |  r   |  这是一个只读命令，不会修改数据库   | GET、STRLEN 等    |
 |  m   | 此命令可能会占用大量内存，执行器需先检查内存使用情况，如果内存紧缺就禁止执行此命令    | SET、APPEND、RPUSH、SADD 等    |
 |   a  |  这是一个管理命令   | SAVE、BGSAVE 等    |
 |   p | 这是一个发布与订阅功能的命令    |  PUBLISH、SUBSRIBE 等   |
-|   f |     |     |
 |    s |  这个命令不可以在 lua 脚步中使用   |   BPOP、BLPOP 等  |
 |   R  |   这是一个随机命令。对于相同的数据集和相同的参数，返回结果可能不同  | SPOP、SRANDMEMBER 等    |
 |   S  | 当在 lua 脚步中使用此命令时，对返回结果进行排序，使得结果有序    | SINTER、SUNION 等    |
