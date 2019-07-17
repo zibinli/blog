@@ -43,7 +43,18 @@ struct __attribute__ ((__packed__)) sdshdr16 { // 长度小于 2^16 的字符串
     unsigned char flags; /* 3 lsb of type, 5 unused bits */
     char buf[];
 };
-...
+struct __attribute__ ((__packed__)) sdshdr32 { // 长度小于 2^32 的字符串类型
+    uint32_t len; /* used */
+    uint32_t alloc; /* excluding the header and null terminator */
+    unsigned char flags; /* 3 lsb of type, 5 unused bits */
+    char buf[];
+};
+struct __attribute__ ((__packed__)) sdshdr64 { // 长度小于 2^64 的字符串类型
+    uint64_t len; /* used */
+    uint64_t alloc; /* excluding the header and null terminator */
+    unsigned char flags; /* 3 lsb of type, 5 unused bits */
+    char buf[];
+};
 ```
 之所以会有 5 种类型的 header，是为了能让不同长度的字符串使用对应大小的 header，提高内存利用率。
 
@@ -52,6 +63,7 @@ struct __attribute__ ((__packed__)) sdshdr16 { // 长度小于 2^16 的字符串
 - buf[]：一个字符串数组。这个数组的长度等于最大容量加 1，存储着真正的字符串数据。
 
 图 1-1 展示了一个 SDS 示例：
+
 ![图 1-1：SDS 示例](https://raw.githubusercontent.com/zibinli/blog/master/Redis/_v_images/20190715201325861_514.png)
 
 示例中，各字段说明如下：
