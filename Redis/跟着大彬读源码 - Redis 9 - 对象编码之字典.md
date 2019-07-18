@@ -24,6 +24,7 @@ typedef struct dictht {
 - sizemask 属性的值总数等于 size-1，这个属性和哈希值一起决定一个键应该被放到 table 数组中哪个索引上。
 
 图 1 展示了一个大小为 4 的空哈希表。
+
 ![大小为4的空哈希表](https://raw.githubusercontent.com/zibinli/blog/master/Redis/_v_images/20190515203213897_23208.png)
 
 #### 1.2 哈希表节点
@@ -44,6 +45,7 @@ typedef struct dictEntry {
 - next 属性是指向另一个哈希表节点的指针。这个指针可以将多个哈希值相同的键值对连接在一起，以此来解决键冲突的问题。
 
 图 2 展示了通过 next 指针，将两个索引相同的键 k1 和 k0 连接在一起的情况。
+
 ![连接在一起的键 k1 和 k0](https://raw.githubusercontent.com/zibinli/blog/master/Redis/_v_images/20190515205808155_12978.png)
 
 #### 1.3 字典
@@ -85,6 +87,7 @@ type 属性和 privdata 属性是针对不同类型的键值对，为创建多�
 rehashidx 属性，它记录了 rehash 目前的进度，如果当前没有进行 rehash，它的值为 -1。至于什么是 rehash，别急，后面会详细说明。
 
 图 3 是没有进行 rehash 的字典：
+
 ![没有进行 rehash 的字典](https://raw.githubusercontent.com/zibinli/blog/master/Redis/_v_images/20190516124719503_21953.png)
 
 ### 2 插入算法
@@ -104,6 +107,7 @@ index = hash & dict->ht[0].sizemask; # 8 & 3 = 0
 ```
 
 计算得出，[k0, v0] 键值对应该被放在哈希表数组索引为 0 的位置上，如图 5：
+
 ![图 5 - 添加 k0-v0 后的字典](https://raw.githubusercontent.com/zibinli/blog/master/Redis/_v_images/20190516130514422_8506.png)
 
 #### 2.1 键冲突
@@ -112,6 +116,7 @@ index = hash & dict->ht[0].sizemask; # 8 & 3 = 0
 Redis 的哈希表使用**链地址法**来解决建冲突。每个哈希表节点都有一个 next 指针，多个哈希表节点可以用 next 指针构成一个单向链表，被分配到同一个索引的多个节点用 next 指针链接成一个单向链表。
 
 举个栗子，假设我们要把 [k2, v2] 键值对添加到图 6 所示的哈希表中，并且计算得出 k2 的索引值为 2，和 k1 冲突，因此，这里就用 next 指针将 k2 和 k1 所在的节点连接起来，如图 7。
+
 ![图 6 - 一个包含两个键值对的哈希表](https://raw.githubusercontent.com/zibinli/blog/master/Redis/_v_images/20190516131134721_9353.png)
 
 ![图 7 - 使用链表解决 k2 和 k1 冲突](https://raw.githubusercontent.com/zibinli/blog/master/Redis/_v_images/20190516131209807_20748.png)
