@@ -54,6 +54,7 @@ typedef struct zlentry {
 ```
 
 如图 1-3，展示了压缩列表节点的结构。
+
 ![图 1-3：压缩列表节点结构](https://raw.githubusercontent.com/zibinli/blog/master/Redis/_v_images/20190729125748351_27862.png)
 
 - prevrawlen：表示前一个节点占用的总字节数。此字段是为了让 ziplist 能够从后向前遍历。
