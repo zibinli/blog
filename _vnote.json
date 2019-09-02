@@ -13,7 +13,10 @@
             "name": "MySQL"
         },
         {
-            "name": "杂项"
+            "name": "other"
+        },
+        {
+            "name": "Nginx"
         }
     ],
     "tags": [
