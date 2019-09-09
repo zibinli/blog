@@ -20,12 +20,12 @@ sudo service ssh --full-restart
 
 ### 2 使用 xshell 登录
 #### 连接配置
-![](_v_images/20190426130503224_23247.png)
+![](https://raw.githubusercontent.com/zibinli/blog/master/other/_v_images/20190426130503224_23247.png)
 
 #### 设置用户名和密码
-![设置用户名和密码](_v_images/20190426130420522_13093.png)
+![设置用户名和密码](https://raw.githubusercontent.com/zibinli/blog/master/other/_v_images/20190426130420522_13093.png)
 
-![成功登录](_v_images/20190426130654198_22013.png)
+![成功登录](https://raw.githubusercontent.com/zibinli/blog/master/other/_v_images/20190426130654198_22013.png)
 
 ### 3 Windows 配置开机自启动
 #### 3.1 windows 计划任务配置
@@ -69,6 +69,6 @@ ps aux | grep ssh # 查看 ssh 服务是否已关闭。只有 --color=auto 这�
 ```
 
 回到任务计划程序页面.
-![任务计划程序列表](_v_images/20190426133815784_23574.png)
+![任务计划程序列表](https://raw.githubusercontent.com/zibinli/blog/master/other/_v_images/20190426133815784_23574.png)
 
 找到建立的计划任务。右键点击，手动运行，查看运行结果。如果“上次运行结果列”出现“操作成功完成”提示，就表示我们的计划任务配置成功啦！

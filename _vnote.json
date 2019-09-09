@@ -13,10 +13,13 @@
             "name": "MySQL"
         },
         {
-            "name": "other"
+            "name": "Other"
         },
         {
             "name": "Nginx"
+        },
+        {
+            "name": "Networking"
         }
     ],
     "tags": [
